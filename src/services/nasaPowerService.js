@@ -1,10 +1,4 @@
-// cropAdvisor.js
-// Crop-zone recommendations for Ghana from NASA POWER climate + OpenWeatherMap.
-// Requires Node 18+ (global fetch, AbortSignal.timeout). No third-party dependencies.
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
 const NASA_URL = "https://power.larc.nasa.gov/api/temporal/daily/point";
 const OWM_URL = "https://api.openweathermap.org/data/2.5/weather";
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
@@ -15,13 +9,12 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const NASA_TTL_MS = 24 * 60 * 60 * 1000;
 const OWM_TTL_MS = 10 * 60 * 1000;
 const GEOCODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MODEL_RETRY_MS = 10 * 60 * 1000; // retry NASA refresh if it only partly worked
+const MODEL_RETRY_MS = 10 * 60 * 1000; 
 const NASA_CONCURRENCY = 4;
 const NASA_FILL_VALUE = -999;
 const K_NEIGHBOURS = 3;
 
-// Feature order: [avgTemp, totalRain, avgSolar, lat, lng].
-// Weights apply after z-scoring; tune these if zones come out wrong.
+
 const FEATURE_WEIGHTS = [1, 1.5, 0.5, 1, 1];
 
 const GHANA_BOUNDS = { minLat: 4.5, maxLat: 11.3, minLng: -3.4, maxLng: 1.4 };
@@ -34,9 +27,7 @@ const log = {
   error: (...a) => console.error("[crop]", ...a),
 };
 
-// ---------------------------------------------------------------------------
-// Zone definitions (unchanged agronomy content)
-// ---------------------------------------------------------------------------
+
 const CROP_MAP = {
   0: {
     name: "Ashanti & Forest Zone (Cocoa, Plantain, Cocoyam, Maize, Citrus)",
@@ -230,10 +221,7 @@ const CROP_MAP = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Reference stations: single source of truth (replaces the two parallel lists).
-// `baseline` is used when NASA POWER can't be reached for that station.
-// ---------------------------------------------------------------------------
+
 const REFERENCE_HUBS = [
   {
     name: "Kumasi (Ashanti Forest)",
@@ -321,9 +309,7 @@ const REFERENCE_HUBS = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Small utilities
-// ---------------------------------------------------------------------------
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
@@ -370,8 +356,7 @@ async function mapWithConcurrency(items, limit, fn) {
   return results;
 }
 
-// fetch + JSON with a timeout and one retry on network errors / 429 / 5xx.
-// Error messages never include the URL, so API keys can't leak into logs.
+
 async function fetchJson(
   url,
   { headers, retries = 1, label = "request" } = {},
@@ -422,15 +407,13 @@ const isInGhana = (lat, lng) =>
   lng >= GHANA_BOUNDS.minLng &&
   lng <= GHANA_BOUNDS.maxLng;
 
-// Last full calendar year, so training and prediction always use the same window.
+// Last full calendar year, so training and prediction 
 function defaultWindow() {
   const year = new Date().getUTCFullYear() - 1;
   return { start: `${year}0101`, end: `${year}1231` };
 }
 
-// ---------------------------------------------------------------------------
-// 1. NASA POWER
-// ---------------------------------------------------------------------------
+
 export async function fetchNasaPowerData(lat, lng, start, end) {
   const win = defaultWindow();
   const params = new URLSearchParams({
@@ -481,9 +464,7 @@ async function getNasaTelemetry(lat, lng) {
   return telemetry;
 }
 
-// ---------------------------------------------------------------------------
-// 2. OpenWeatherMap (live conditions: context only, never fed to the classifier)
-// ---------------------------------------------------------------------------
+
 let warnedMissingOwmKey = false;
 
 export async function fetchOpenWeatherMapData(lat, lng) {
@@ -533,12 +514,8 @@ function toLiveWeather(owm) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 3. Model: distance-weighted nearest-neighbour over the reference stations.
-//    Features are z-scored so rainfall (hundreds of mm) doesn't drown out
-//    temperature (tens of °C) or coordinates (single digits).
-// ---------------------------------------------------------------------------
-let model = null; // { hubs, stats, complete, builtAt }
+
+let model = null; 
 let initPromise = null;
 
 const scaleVector = (v, stats) =>
@@ -566,9 +543,6 @@ function buildModel(hubs, complete) {
   };
 }
 
-// Refreshes each station's climate from NASA POWER (in parallel, a few at a
-// time). A failing station falls back to its own baseline instead of
-// discarding the whole refresh.
 export function initModelFromNasa({ force = false } = {}) {
   if (initPromise && !force) return initPromise;
 
@@ -600,7 +574,7 @@ export function initModelFromNasa({ force = false } = {}) {
     return model;
   })();
 
-  // Never cache a rejected promise.
+ 
   initPromise.catch(() => {
     initPromise = null;
   });
@@ -615,7 +589,7 @@ async function ensureModel() {
   if (!model) {
     await initModelFromNasa();
   } else if (!model.complete && Date.now() - model.builtAt > MODEL_RETRY_MS) {
-    model.builtAt = Date.now(); // stop other requests retrying at the same time
+    model.builtAt = Date.now(); 
     initModelFromNasa({ force: true }).catch(() => {});
   }
   return model;
@@ -681,9 +655,9 @@ function pickCrops(pool, lat, lng, count = 5) {
 
 const shortZoneName = (zone) => zone.name.split("(")[0].trim();
 
-// ---------------------------------------------------------------------------
+
 // 4. Public prediction + recommendation API
-// ---------------------------------------------------------------------------
+
 export function getMlRecommendation(
   avgTemp,
   totalRain,
@@ -791,15 +765,13 @@ export async function getSmartCropRecommendation(lat, lng) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 5. Nominatim geocoding (cached + throttled to respect the 1 req/sec policy)
-// ---------------------------------------------------------------------------
+
 let nextGeocodeSlot = 0;
 
 async function waitForGeocodeSlot() {
   const now = Date.now();
   const slot = Math.max(now, nextGeocodeSlot);
-  nextGeocodeSlot = slot + 1100; // reserve synchronously so concurrent callers queue
+  nextGeocodeSlot = slot + 1100; 
   if (slot > now) await sleep(slot - now);
 }
 
