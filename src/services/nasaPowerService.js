@@ -402,7 +402,7 @@ async function fetchJson(
   throw lastError;
 }
 
-function validateCoords(lat, lng) {
+export function validateCoords(lat, lng) {
   const la = typeof lat === "number" ? lat : parseFloat(lat);
   const ln = typeof lng === "number" ? lng : parseFloat(lng);
   if (
@@ -416,7 +416,7 @@ function validateCoords(lat, lng) {
   return { lat: la, lng: ln };
 }
 
-const isInGhana = (lat, lng) =>
+export const isInGhana = (lat, lng) =>
   lat >= GHANA_BOUNDS.minLat &&
   lat <= GHANA_BOUNDS.maxLat &&
   lng >= GHANA_BOUNDS.minLng &&
@@ -470,7 +470,7 @@ export function processNasaTelemetry(nasaJson) {
   };
 }
 
-async function getNasaTelemetry(lat, lng) {
+export async function getNasaTelemetry(lat, lng) {
   const key = `${lat.toFixed(2)}|${lng.toFixed(2)}|${defaultWindow().start}`;
   const hit = nasaCache.get(key);
   if (hit) return hit;
@@ -518,7 +518,7 @@ export async function fetchOpenWeatherMapData(lat, lng) {
   }
 }
 
-function toLiveWeather(owm) {
+export function toLiveWeather(owm) {
   if (!owm?.main) return null;
   return {
     stationName: owm.name,

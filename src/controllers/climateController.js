@@ -1,9 +1,14 @@
 import User from "../models/User.js";
 import {
   fetchNasaPowerData,
+  fetchOpenWeatherMapData,
   getMlRecommendation,
+  getNasaTelemetry,
   getSmartCropRecommendation,
+  isInGhana,
   lookupCoordinates,
+  toLiveWeather,
+  validateCoords,
 } from "../services/nasaPowerService.js";
 import Farm from "../models/Farm.js";
 
@@ -15,7 +20,8 @@ export async function getClimateAndRecommendations(req, res) {
     if (!userId) {
       return res.status(401).json({
         success: false,
-        error: "Unauthorized. Please log in to fetch your farm's climate recommendations.",
+        error:
+          "Unauthorized. Please log in to fetch your farm's climate recommendations.",
       });
     }
 
@@ -25,7 +31,8 @@ export async function getClimateAndRecommendations(req, res) {
     if (!userFarm) {
       return res.status(404).json({
         success: false,
-        error: "No registered farm found for this user account. Please map your farm layout first.",
+        error:
+          "No registered farm found for this user account. Please map your farm layout first.",
       });
     }
 
@@ -54,19 +61,19 @@ export async function getClimateAndRecommendations(req, res) {
         averageSolarRadiation: parseFloat(hybridResult.telemetry.avgSolar),
       },
       // 5. Now safely passing real-time OpenWeatherMap metrics to your client dashboard
-      liveWeather: hybridResult.liveWeather || null, 
+      liveWeather: hybridResult.liveWeather || null,
       aiRecommendation: {
         suggestedAdaptiveCrop: hybridResult.recommendation.name,
         confidenceScore: "Dynamic Leaf Assessment",
         reasoning: hybridResult.recommendation.reasoning,
-        modelEngine: "ml-cart in-memory decision tree (True ML / 16-Hub Scaled Framework)",
+        modelEngine:
+          "ml-cart in-memory decision tree (True ML / 16-Hub Scaled Framework)",
       },
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
-
 
 // Import the lookup function alongside your other modules
 
@@ -179,3 +186,74 @@ export async function getPersonalizedClimateAndRecommendations(req, res) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
+
+export async function getBigData(req, res) {
+  try {
+    let lat = 5.6037;
+    let lng = -0.187;
+    let locationName = "Accra Test Field (Default)";
+
+    if (req.user && (req.user.id || req.user.userId)) {
+      const farm = await Farm.findOne({
+        userId: req.user.userId,
+      });
+      if (farm && farm.lat && farm.lng) {
+        lat = farm.lat;
+        lng = farm.lng;
+        locationName = farm.locationName;
+      }
+    }
+
+    const coords = validateCoords(lat, lng);
+    const warnings = [];
+    if (!isInGhana(coords.lat, coords.lng)) {
+      warnings.push("Coordinates are outside Ghana.");
+    }
+
+    // Gather data from NASA POWER and OpenWeatherMap in parallel
+    const [nasaResult, owmResult] = await Promise.allSettled([
+      getNasaTelemetry(coords.lat, coords.lng),
+      fetchOpenWeatherMapData(coords.lat, coords.lng),
+    ]);
+
+    const liveWeather =
+      owmResult.status === "fulfilled" ? toLiveWeather(owmResult.value) : null;
+
+    let climate;
+    let dataSource;
+    if (nasaResult.status === "fulfilled") {
+      climate = nasaResult.value;
+      dataSource = liveWeather
+        ? "NASA POWER Satellite Telemetry + OpenWeatherMap Live API"
+        : "NASA POWER Satellite Telemetry";
+    } else {
+      const m = await ensureModel();
+      climate = estimateClimateFromHubs(m, coords.lat, coords.lng);
+      dataSource = "Regional Baseline Estimate";
+      warnings.push(
+        "NASA POWER unavailable; estimated from nearby reference stations.",
+      );
+    }
+
+    // PURE DATA GATHERING RESPONSE (No AI crop recommendations)
+    res.json({
+      success: true,
+      lat: coords.lat,
+      lng: coords.lng,
+      locationName,
+      dataSource,
+      telemetry: {
+        avgTemp: Number(climate.avgTemp).toFixed(1),
+        totalRain: Number(climate.totalRain).toFixed(0),
+        avgSolar: Number(climate.avgSolar).toFixed(1),
+      },
+      liveWeather,
+      warnings,
+    });
+  } catch (error) {
+    console.error("🛑 Telemetry gather error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+

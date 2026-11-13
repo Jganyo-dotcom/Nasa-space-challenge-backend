@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getClimateAndRecommendations, getPersonalizedClimateAndRecommendations } from '../controllers/climateController.js';
+import { getBigData, getClimateAndRecommendations, getPersonalizedClimateAndRecommendations } from '../controllers/climateController.js';
 import { login, register } from '../controllers/authController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { updateMyFarm } from '../controllers/farmController.js';
@@ -12,6 +12,7 @@ router.get('/personal-recommendations', verifyToken, getPersonalizedClimateAndRe
 
 // Protected route to update persistent farm profile
 router.put("/farm", verifyToken, updateMyFarm);
+router.get("/data", verifyToken, getBigData);
 router.post('/auth/login', login);
 router.post('/auth/register', register);
 
