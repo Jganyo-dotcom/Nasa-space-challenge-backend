@@ -5,6 +5,8 @@ const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const NOMINATIM_USER_AGENT =
   "FieldShiftAgriAdapterDashboard/1.0 (SpaceApps2026)";
 
+  // me debugging
+
 const REQUEST_TIMEOUT_MS = 15_000;
 const NASA_TTL_MS = 24 * 60 * 60 * 1000;
 const OWM_TTL_MS = 10 * 60 * 1000;
